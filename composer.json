@@ -1,0 +1,24 @@
+{
+    "name": "eaglefw/forms",
+    "description": "Eagle framework Forms Factory class.",
+    "type": "library",
+    "license": "MIT",
+    "homepage": "https://milankyncl.cz/eagle",
+    "authors": [
+        {
+            "name": "Milan Kyncl",
+            "email": "kontakt@milankyncl.cz"
+        }
+    ],
+    "minimum-stability": "dev",
+    "require": {
+		"php": ">=5.5",
+		"ext-phalcon": "~3.1"
+	},
+    "require-dev": {},
+    "autoload": {
+        "classmap": [
+            "src/"
+        ]
+    }
+}

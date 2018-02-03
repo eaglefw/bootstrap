@@ -1,0 +1,9 @@
+{
+    "application" : {
+
+        "modules" : [
+            "Web",
+            "Manager"
+        ]
+    }
+}
