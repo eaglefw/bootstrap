@@ -25,16 +25,25 @@
 
 namespace Eagle;
 
+use Phalcon\Events\Manager as EventsManager;
 use Phalcon\Loader;
 use Phalcon\Config;
 use Phalcon\Exception;
 use Phalcon\Di;
-use Eagle\Debugger\Logger;
 use Phalcon\Config\Adapter\Json;
 use Phalcon\Config\Adapter\Php;
 use Phalcon\Config\Adapter\Yaml;
 use Phalcon\Di\FactoryDefault;
 use Eagle\Bootstrap\Exception as BootstrapException;
+use Phalcon\Mvc\View;
+use Phalcon\Mvc\View\Engine\Volt;
+use Phalcon\Text;
+use Phalcon\Security;
+use Phalcon\Mvc\Dispatcher;
+use Phalcon\Events\Event;
+use Phalcon\Session\Adapter\Files as SessionAdapter;
+use Phalcon\Cache\Frontend\Data as FrontendData;
+use Phalcon\Cache\Backend\File as BackendFile;
 
 /**
  * Class Bootstrap
@@ -60,6 +69,12 @@ class Bootstrap {
 	 */
 
 	protected $dependencyContainer;
+
+	/**
+	 * @var boolean
+	 */
+
+	protected $pluginsDisabled = false;
 
 
 	/**
@@ -160,6 +175,7 @@ class Bootstrap {
 
 		if(is_null($modules))
 			throw new Exception('Modules are not registered in application configuration.');
+
 		return $modules;
 	}
 
@@ -189,9 +205,182 @@ class Bootstrap {
 	 * @return Di
 	 */
 
-	public function getDependencyContainer() {
+	public function createDependencyContainer() {
+
+		/**
+		 * Volt Compiler
+		 */
+
+		$this->dependencyContainer->set('voltCompiler', function($view, $di) {
+
+			$volt = new Volt($view, $di);
+
+			$volt->setOptions([
+				'compiledPath'      => APP_PATH . '/cache/volt/',
+				'compiledExtension' => '.php'
+			]);
+
+			return $volt;
+
+		});
+
+		/**
+		 * View class
+		 */
+
+		$this->dependencyContainer->set('view', function() {
+
+			$view = new View();
+
+			$view->setLayout('main');
+
+			$view->registerEngines(
+				[
+					'.volt' => 'voltCompiler',
+				]
+			);
+
+			return $view;
+
+		}, true);
+
+		/**
+		 * Dispatcher
+		 */
+
+		$this->dependencyContainer->set('dispatcher', function() {
+
+			$eventsManager = new EventsManager();
+
+			$eventsManager->attach('dispatch', function($event, Dispatcher $dispatcher) {
+
+				$actionName = Text::camelize($dispatcher->getActionName());
+
+				$dispatcher->setActionName(lcfirst($actionName));
+
+				$controller = Text::camelize($dispatcher->getControllerName());
+
+				$dispatcher->setControllerName(lcfirst($controller));
+
+			});
+
+			$eventsManager->attach('dispatch:beforeException', function (Event $event, Dispatcher $dispatcher, Exception $exception) {
+
+				switch ($exception->getCode()) {
+
+					case Dispatcher::EXCEPTION_HANDLER_NOT_FOUND:
+					case Dispatcher::EXCEPTION_ACTION_NOT_FOUND:
+
+
+						$dispatcher->forward([
+							'controller' => 'error',
+							'action' => 'notFoundException'
+						]);
+
+						return false;
+
+					default:
+
+						if(Debug::isDebugMode()) {
+
+							$dispatcher->forward(
+								array(
+									'controller' => 'error',
+									'action' => 'uncaughtException',
+								)
+							);
+
+							return false;
+						}
+
+				}
+
+				return true;
+
+			});
+
+			$dispatcher = new Dispatcher();
+
+			$dispatcher->setEventsManager($eventsManager);
+
+			return $dispatcher;
+		});
+
+		/**
+		 * Session adapter
+		 */
+
+		$this->dependencyContainer->set('session', function() {
+
+			$session = new SessionAdapter();
+
+			$session->setOptions([
+				'uniqueId' => $this->configuration->get('application')->get('prefix')
+			]);
+
+			$session->start();
+
+			return $session;
+
+		}, true);
+
+
+		// Set the models cache service
+
+		$this->dependencyContainer->set('modelsCache', function () {
+
+			$frontCache = new FrontendData(
+				[
+					'lifetime' => 86400,
+				]
+			);
+
+			$cache = new BackendFile(
+				$frontCache,
+				[
+					'cacheDir' => $this->appDirectory . '/cache/db/'
+				]
+			);
+
+			return $cache;
+		});
+
+		/**
+		 * Set up the flash session service
+		 */
+
+		$this->dependencyContainer->set('cookies', function() {
+
+			$cookies = new \Phalcon\Http\Response\Cookies();
+
+			$cookies->useEncryption(false);
+
+			return $cookies;
+
+		}, true);
+
+		$this->dependencyContainer->set('security', function() {
+
+			$security = new Security();
+
+			$security->setWorkFactor(12);
+
+			return $security;
+
+		}, true);
+
 
 		return $this->dependencyContainer;
+	}
+
+	public function disablePlugins() {
+
+		$this->pluginsDisabled = true;
+	}
+
+	public function enablePlugins() {
+
+		$this->pluginsDisabled = false;
 	}
 
 }

@@ -24,25 +24,35 @@
  */
 
 use Eagle\Bootstrap;
-use Eagle\Debugger;
+use Eagle\Debug;
 
 require_once '../vendor/autoload.php';
 require_once '../../debugger/vendor/autoload.php';
 
+/**
+ * Define APP path constant
+ * ------------------------
+ */
+
 define('__APP__' , realpath(__DIR__ . '/app'));
+
+/**
+ * Turn on debugger
+ * ----------------
+ */
+
+new Debug(Debug::ON);
 
 /**
  * Initializing bootstrap
  * ----------------------
  */
 
-Debugger::setMode(Debugger::ON);
-
 $bootstrap = new Bootstrap();
 
 $bootstrap->setAppDirectory(__APP__);
 
-$bootstrap->addConfiguration(__APP__ . '/config/config.jso', Bootstrap::CONFIG_TYPE_JSON);
+$bootstrap->addConfiguration(__APP__ . '/config/config.json', Bootstrap::CONFIG_TYPE_JSON);
 
 $bootstrap->createAutoloader()
           ->registerDirs([
@@ -51,8 +61,8 @@ $bootstrap->createAutoloader()
 
 /**
  * Running application
+ * -------------------
  */
 
-
-$dependencyContainer = $bootstrap->getDependencyContainer();
+$dependencyContainer = $bootstrap->createDependencyContainer();
 
